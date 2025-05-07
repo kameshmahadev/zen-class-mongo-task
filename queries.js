@@ -31,7 +31,7 @@ db.company_drives.find({
 // 3. Find all company drives attended by user_id: 1
 db.company_drives.find({ user_id: 1 });
 
-// 4. Find number of problems solved by each user in codekata
+// 4. Find number of problems solved by each user in Codekata
 db.codekata.aggregate([
   {
     $lookup: {
@@ -124,6 +124,71 @@ const submittedTaskUserIds = db.tasks.distinct("user_id");
 
 db.users.find({
   user_id: {
-    $nin: [...new Set([...attendedUserIds, ...submittedTaskUserIds])]
+    $nin: [...new Set([...attendedUserIds, ...submittedTaskUserIds])],
   }
 });
+
+// 11. Find all the topics and tasks which are taught in October
+db.topics.aggregate([
+  { $match: { date: { $gte: ISODate("2020-10-01"), $lt: ISODate("2020-11-01") } } },
+  { $lookup: {
+      from: "tasks",
+      localField: "topic_id",
+      foreignField: "topic_id",
+      as: "tasks"
+  }},
+  { $unwind: "$tasks" }
+]);
+
+// 12. Find all company drives between 15 Oct 2020 and 31 Oct 2020
+db.company_drives.find({
+  drive_date: { $gte: ISODate("2020-10-15"), $lte: ISODate("2020-10-31") }
+});
+
+// 13. Find all company drives and students who appeared for placement
+db.company_drives.aggregate([
+  { $lookup: {
+      from: "users",
+      localField: "user_id",
+      foreignField: "user_id",
+      as: "students"
+  }},
+  { $match: { "students.status": "appeared" } }
+]);
+
+// 14. Find number of problems solved in Codekata
+db.codekata.aggregate([
+  { $group: { _id: "$user_id", totalSolved: { $sum: "$problems_solved" } } }
+]);
+
+// 15. Find mentors with more than 15 mentees
+db.mentors.aggregate([
+  { $lookup: {
+      from: "users",
+      localField: "mentor_id",
+      foreignField: "mentor_id",
+      as: "mentees"
+  }},
+  { $match: { "mentees.length": { $gt: 15 } } }
+]);
+
+// 16. Find number of users absent and task not submitted between 15 Oct and 31 Oct 2020
+db.users.aggregate([
+  { $lookup: {
+      from: "attendance",
+      localField: "user_id",
+      foreignField: "user_id",
+      as: "attendance"
+  }},
+  { $lookup: {
+      from: "tasks",
+      localField: "user_id",
+      foreignField: "user_id",
+      as: "tasks"
+  }},
+  { $match: {
+      "attendance.status": "absent",
+      "tasks.submitted": false,
+      "attendance.date": { $gte: ISODate("2020-10-15"), $lte: ISODate("2020-10-31") }
+  }}
+]);
